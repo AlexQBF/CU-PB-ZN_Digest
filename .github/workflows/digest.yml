@@ -32,6 +32,6 @@ jobs:
         run: |
           git config user.name "digest-bot"
           git config user.email "bot@users.noreplymail.github.com"
-          git add sent.json recent_digests.json digests/ 2>/dev/null || true
+          git add sent.json recent_digests.json last_prices.json digests/ 2>/dev/null || true
           git commit -m "Обновление журналов дайджеста $(date -u +%Y-%m-%d)" || echo "Нет изменений"
           git push || echo "Нечего пушить"
