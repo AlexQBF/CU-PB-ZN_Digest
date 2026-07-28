@@ -45,6 +45,8 @@ AI_KEY = os.environ.get("AI_API_KEY", "").strip()
 AI_BASE = os.environ.get("AI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai").strip().rstrip("/")
 AI_MODEL = os.environ.get("AI_MODEL", "gemini-2.5-flash").strip()
 
+METALS_API_KEY = os.environ.get("METALS_API_KEY", "").strip()  # ключ metals.dev для котировок
+
 
 MSK = timezone(timedelta(hours=3))
 
@@ -340,6 +342,46 @@ def make_digest_ai(items, recent_topics):
 
 
 
+
+# ---------- Котировки меди/свинца/цинка (metals.dev, LME, $/тонна) ----------
+def fetch_prices():
+    if not METALS_API_KEY:
+        return None
+    try:
+        r = requests.get("https://api.metals.dev/v1/latest",
+                         params={"api_key": METALS_API_KEY, "currency": "USD", "unit": "mt"},
+                         timeout=REQUEST_TIMEOUT)
+        if not r.ok:
+            print(f"[!] metals.dev: HTTP {r.status_code} {r.text[:200]}")
+            return None
+        data = r.json()
+        metals = data.get("metals", {}) or {}
+        copper = metals.get("lme_copper")
+        lead = metals.get("lme_lead")
+        zinc = metals.get("lme_zinc")
+        if copper is None and lead is None and zinc is None:
+            print(f"[!] metals.dev: нет цен LME. Ответ: {str(data)[:200]}")
+            return None
+        ts = (data.get("timestamps", {}) or {}).get("metal", "")
+        try:
+            d = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(MSK).strftime("%d.%m.%Y")
+        except Exception:
+            d = datetime.now(MSK).strftime("%d.%m.%Y")
+        def fmt(v):
+            return f"{v:,.0f}".replace(",", " ") if v else "—"
+        lines = ["\n———", f"<i>Котировки LME на {d}</i>"]
+        if copper is not None:
+            lines.append(f"<i>Медь: {fmt(copper)} $/т</i>")
+        if lead is not None:
+            lines.append(f"<i>Свинец: {fmt(lead)} $/т</i>")
+        if zinc is not None:
+            lines.append(f"<i>Цинк: {fmt(zinc)} $/т</i>")
+        return "\n".join(lines)
+    except Exception as e:
+        print(f"[!] metals.dev: ошибка — {e}")
+        return None
+
+
 def trim_to_one_message(header, body, tail):
     """Если header+body+tail не влезает в одно сообщение Telegram,
     отбрасываем пункты с конца (наименее важные — дайджест отсортирован по важности),
@@ -420,11 +462,18 @@ def main():
     if body.strip() == "НЕТ_НОВОСТЕЙ":
         body = "За период существенных новостей по меди, свинцу и цинку не найдено."
 
+    # котировки LME в конец (только если дайджест реально сформирован)
+    prices_block = ""
+    if not ai_failed and items and "не найдено" not in body:
+        prices = fetch_prices()
+        if prices:
+            prices_block = "\n" + prices
+
     # гарантия одного сообщения: если не влезает — отбрасываем наименее важные пункты с конца
     if not ai_failed:
-        body = trim_to_one_message(header, body, "")
+        body = trim_to_one_message(header, body, prices_block)
 
-    send_to_telegram(header + body)
+    send_to_telegram(header + body + prices_block)
 
     new_ids = [] if ai_failed else [p["id"] for p in items if p["id"]]
     sent_ids.update(new_ids)
