@@ -485,9 +485,9 @@ def main():
     if body.strip() == "НЕТ_НОВОСТЕЙ":
         body = "За период существенных новостей по меди, свинцу и цинку не найдено."
 
-    # котировки LME в конец (только если дайджест реально сформирован)
+    # котировки LME в конец — ВСЕГДА (даже если новостей нет), кроме случая сбоя ИИ
     prices_block = ""
-    if not ai_failed and items and "не найдено" not in body:
+    if not ai_failed:
         prices = fetch_prices()
         if prices:
             prices_block = "\n" + prices
