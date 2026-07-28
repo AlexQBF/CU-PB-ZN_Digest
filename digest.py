@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Бот-дайджест по золоту и серебру: гибрид Telegram-каналов + RSS-сайтов в ОДНОМ дайджесте.
+Бот-дайджест по меди, свинцу и цинку: Telegram-каналы + RSS-сайты в ОДНОМ дайджесте.
 
 Поток:
   1. Собирает посты из ТГ-каналов (channels.json, через t.me/s/) И записи с RSS-сайтов (feeds_sites.json)
   2. Складывает всё в общий пул, отсеивает уже отправленное (sent.json)
-  3. Gemini: фильтр золото/серебро, склейка дублей между всеми источниками (в т.ч. по смыслу),
+  3. Gemini: фильтр медь/свинец/цинк, склейка дублей между всеми источниками (в т.ч. по смыслу),
      оценка важности, дайджест 6-8 пунктов, ссылка вшита в глагол заголовка (ведёт на пост ТГ или статью сайта)
   4. Шлёт в Telegram-канал, сохраняет журналы (sent.json, recent_digests.json) и архив (digests/)
 
@@ -328,6 +328,22 @@ def make_digest_ai(items, recent_topics):
 
 
 
+def trim_to_one_message(header, body, tail):
+    """Если header+body+tail не влезает в одно сообщение Telegram,
+    отбрасываем пункты с конца (наименее важные — дайджест отсортирован по важности),
+    пока не влезет."""
+    LIMIT = 4000
+    def total_len(b):
+        return len(header) + len(b) + len(tail)
+    if total_len(body) <= LIMIT:
+        return body
+    parts = [p for p in body.split("\n\n") if p.strip()]
+    while len(parts) > 1 and total_len("\n\n".join(parts)) > LIMIT:
+        removed = parts.pop()
+        print(f"[i] Дайджест не влезал в одно сообщение — убран последний пункт ({removed[:60]}…)")
+    return "\n\n".join(parts)
+
+
 def clean_html_for_telegram(text):
     text = re.sub(r"<\s*br\s*/?\s*>", "\n", text, flags=re.IGNORECASE)
     allowed = {"b", "i", "u", "s", "a", "code", "pre"}
@@ -386,7 +402,7 @@ def main():
         body = "⚠️ Не задан AI_API_KEY."
 
     if body.strip() == "НЕТ_НОВОСТЕЙ":
-        body = "За период существенных новостей по золоту и серебру не найдено."
+        body = "За период существенных новостей по меди, свинцу и цинку не найдено."
 
     # гарантия одного сообщения: если не влезает — отбрасываем наименее важные пункты с конца
     if not ai_failed:
