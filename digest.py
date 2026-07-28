@@ -33,6 +33,7 @@ CHANNELS_FILE = "channels.json"
 FEEDS_FILE = "feeds_sites.json"
 SENT_FILE = "sent.json"
 RECENT_DIGESTS_FILE = "recent_digests.json"
+LAST_PRICES_FILE = "last_prices.json"  # прошлые котировки для сравнения (стрелки ↑/↓/≈)
 DIGESTS_DIR = "digests"
 MAX_ITEMS_TO_AI = 200
 RECENT_DIGESTS_KEEP = 5
@@ -356,26 +357,48 @@ def fetch_prices():
             return None
         data = r.json()
         metals = data.get("metals", {}) or {}
-        copper = metals.get("lme_copper")
-        lead = metals.get("lme_lead")
-        zinc = metals.get("lme_zinc")
-        if copper is None and lead is None and zinc is None:
+        cur = {
+            "copper": metals.get("lme_copper"),
+            "lead": metals.get("lme_lead"),
+            "zinc": metals.get("lme_zinc"),
+        }
+        if all(v is None for v in cur.values()):
             print(f"[!] metals.dev: нет цен LME. Ответ: {str(data)[:200]}")
             return None
+
+        # прошлые цены для сравнения (стрелки)
+        prev = load_json(LAST_PRICES_FILE, {})
+
+        def arrow(name):
+            now, was = cur.get(name), prev.get(name)
+            if now is None or was is None:
+                return ""  # не с чем сравнивать (первый запуск)
+            if now > was:
+                return " ↑"
+            if now < was:
+                return " ↓"
+            return " ≈"
+
         ts = (data.get("timestamps", {}) or {}).get("metal", "")
         try:
             d = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(MSK).strftime("%d.%m.%Y")
         except Exception:
             d = datetime.now(MSK).strftime("%d.%m.%Y")
+
         def fmt(v):
             return f"{v:,.0f}".replace(",", " ") if v else "—"
+
         lines = ["\n———", f"<i>Котировки LME на {d}</i>"]
-        if copper is not None:
-            lines.append(f"<i>Медь: {fmt(copper)} $/т</i>")
-        if lead is not None:
-            lines.append(f"<i>Свинец: {fmt(lead)} $/т</i>")
-        if zinc is not None:
-            lines.append(f"<i>Цинк: {fmt(zinc)} $/т</i>")
+        if cur["copper"] is not None:
+            lines.append(f"<i>Медь: {fmt(cur['copper'])} $/т{arrow('copper')}</i>")
+        if cur["lead"] is not None:
+            lines.append(f"<i>Свинец: {fmt(cur['lead'])} $/т{arrow('lead')}</i>")
+        if cur["zinc"] is not None:
+            lines.append(f"<i>Цинк: {fmt(cur['zinc'])} $/т{arrow('zinc')}</i>")
+
+        # сохраняем текущие цены как прошлые для следующего запуска
+        save_json(LAST_PRICES_FILE, {k: v for k, v in cur.items() if v is not None})
+
         return "\n".join(lines)
     except Exception as e:
         print(f"[!] metals.dev: ошибка — {e}")
