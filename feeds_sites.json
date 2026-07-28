@@ -1,0 +1,8 @@
+{
+  "_comment": "RSS-ленты сайтов для дайджеста по меди, свинцу и цинку. enabled=false отключает ленту.",
+  "feeds": [
+    { "name": "НедраДВ (сайт)", "url": "https://nedradv.ru/nedradv/ru/rss", "enabled": true },
+    { "name": "Mining.com", "url": "https://mining.com/rss", "enabled": true },
+    { "name": "Mining Weekly — Base Metals", "url": "https://www.miningweekly.com/page/base-metals/rss", "enabled": true }
+  ]
+}
