@@ -1,0 +1,36 @@
+name: Daily Metals Digest
+
+on:
+  schedule:
+    # 12:31 UTC = 15:31 МСК, только будни (пн-пт). В сб/вс не запускается.
+    # По понедельникам код сам расширяет окно сбора до 72ч.
+    - cron: "31 12 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Запустить бота-дайджест
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_BASE_URL: ${{ secrets.AI_BASE_URL }}
+          AI_MODEL: ${{ secrets.AI_MODEL }}
+        run: python digest.py
+      - name: Сохранить журналы и архив обратно в репозиторий
+        run: |
+          git config user.name "digest-bot"
+          git config user.email "bot@users.noreplymail.github.com"
+          git add sent.json recent_digests.json digests/ 2>/dev/null || true
+          git commit -m "Обновление журналов дайджеста $(date -u +%Y-%m-%d)" || echo "Нет изменений"
+          git push || echo "Нечего пушить"
