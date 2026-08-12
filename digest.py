@@ -380,13 +380,13 @@ def fetch_prices():
 
         def arrow(name):
             now, was = cur.get(name), prev.get(name)
-            if now is None or was is None:
+            if now is None or was is None or not was:
                 return ""  # не с чем сравнивать (первый запуск)
-            if now > was:
-                return " ↑"
-            if now < was:
-                return " ↓"
-            return " ≈"
+            if now == was:
+                return " ≈"
+            pct = (now - was) / was * 100
+            sign = "↑" if now > was else "↓"
+            return f" {sign} ({pct:+.1f}%)"
 
         ts = (data.get("timestamps", {}) or {}).get("metal", "")
         try:
